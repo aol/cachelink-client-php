@@ -67,9 +67,6 @@ class CacheLinkClient
 			$result = null;
 		} else {
 			$result = unserialize($serialized_value);
-			if ($result === false) {
-				$result = null;
-			}
 		}
 		return $result;
 	}
@@ -96,9 +93,6 @@ class CacheLinkClient
 				$item = null;
 			} else {
 				$item = unserialize($serialized_value);
-				if ($item === false) {
-					$item = null;
-				}
 			}
 			$results[] = $item;
 		}

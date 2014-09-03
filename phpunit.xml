@@ -1,37 +1,22 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <phpunit
-        bootstrap="tests/bootstrap.php"
-        colors="true"
-        convertErrorsToExceptions="true"
-        convertNoticesToExceptions="true"
-        convertWarningsToExceptions="true"
-        >
-    <filter>
-        <whitelist processUncoveredFilesFromWhitelist="true">
-            <directory suffix=".php">lib/</directory>
+	bootstrap="tests/bootstrap.php"
+	convertErrorsToExceptions="true"
+	convertNoticesToExceptions="true"
+	convertWarningsToExceptions="true"
+	strict="true">
 
-            <exclude>
-                <directory>vendor/</directory>
-            </exclude>
-        </whitelist>
-    </filter>
+	<testsuite>
+		<directory>./tests</directory>
+	</testsuite>
 
-    <listeners>
-        <listener class="\Mockery\Adapter\Phpunit\TestListener" />
-        <listener class="JohnKary\PHPUnit\Listener\SpeedTrapListener"/>
-    </listeners>
+	<filter>
+		<whitelist>
+			<directory suffix=".php">src</directory>
+		</whitelist>
+	</filter>
 
-    <logging>
-        <log type="coverage-html" target="coverage" charset="UTF-8"
-             highlight="true" lowUpperBound="35" highLowerBound="70"/>
-        <log type="coverage-clover" target="build/logs/clover.xml"/>
-        <log type="coverage-crap4j" target="build/logs/crap4j.xml"/>
-        <log type="junit" target="build/logs/junit.xml" logIncompleteSkipped="false"/>
-    </logging>
+	<logging>
+		<log type="coverage-clover" target="build/logs/clover.xml"/>
+	</logging>
 
-    <testsuites>
-        <testsuite name="Cachelink Client Test Suite">
-            <directory>tests</directory>
-        </testsuite>
-    </testsuites>
 </phpunit>

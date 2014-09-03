@@ -43,6 +43,31 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		$this->assertEquals($vals, $result_get_many);
 	}
 
+	public function testNonexistent()
+	{
+		$this->client->setupDirectRedis($this->redis_client);
+		$this->assertNull($this->client->get('noope'));
+		$this->assertEquals(array_fill(0, 2, null), $this->client->getMany(['no1','no2']));
+	}
+
+	/**
+	 * @expectedException \Exception
+	 */
+	public function testInvalid()
+	{
+		$this->redis_client->set('d:invalid', '$%^&*(');
+		$this->client->get('invalid');
+	}
+
+	/**
+	 * @expectedException \Exception
+	 */
+	public function testInvalidMany()
+	{
+		$this->redis_client->set('d:invalidMany', '$%^&*(');
+		$this->client->getMany(['invalidMany']);
+	}
+
 	public function dataSetAndGet()
 	{
 		$keys_to_vals = [
@@ -88,43 +113,50 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('asd', 'V4', 100000, [], ['wait' => true])));
 		$this->assertEquals(['V1','V2','V3','V4'], $this->client->getMany(['foo','bar','baz','asd']));
 
-		$this->assertEquals(
-			[
+		$expected_clear = [
+			'success' => true,
+			'level' => 1,
+			'keys' => ['asd'],
+			'keysCount' => 1,
+			'cleared' => 1,
+			'keysContains' => [],
+			'removedFromContains' => 0,
+			'keysInDeleted' => 0,
+			'keysNextLevel' => ['bar'],
+			'nextLevel' => [
 				'success' => true,
-				'level' => 1,
-				'keys' => ['asd'],
+				'level' => 2,
+				'keys' => ['bar'],
 				'keysCount' => 1,
 				'cleared' => 1,
-				'keysContains' => [],
-				'removedFromContains' => 0,
-				'keysInDeleted' => 0,
-				'keysNextLevel' => ['bar'],
+				'keysContains' => ['asd'],
+				'removedFromContains' => 1,
+				'keysInDeleted' => 1,
+				'keysNextLevel' => ['foo'],
 				'nextLevel' => [
 					'success' => true,
-					'level' => 2,
-					'keys' => ['bar'],
+					'level' => 3,
+					'keys' => ['foo'],
 					'keysCount' => 1,
 					'cleared' => 1,
-					'keysContains' => ['asd'],
-					'removedFromContains' => 1,
+					'keysContains' => ['bar', 'baz'],
+					'removedFromContains' => 2,
 					'keysInDeleted' => 1,
-					'keysNextLevel' => ['foo'],
-					'nextLevel' => [
-						'success' => true,
-						'level' => 3,
-						'keys' => ['foo'],
-						'keysCount' => 1,
-						'cleared' => 1,
-						'keysContains' => ['bar', 'baz'],
-						'removedFromContains' => 2,
-						'keysInDeleted' => 1,
-						'keysNextLevel' => []
-					],
+					'keysNextLevel' => []
 				],
-				'allKeysCleared' => ['asd','bar','foo']
 			],
-			$this->client->clear(['asd'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true])
-		);
+			'allKeysCleared' => ['asd','bar','foo']
+		];
+
+		$clear_result = $this->client->clear(['asd'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true]);
+		if (!empty($clear_result['nextLevel']['keysContains'])) {
+			sort($clear_result['nextLevel']['keysContains']);
+		}
+		if (!empty($clear_result['nextLevel']['nextLevel']['keysContains'])) {
+			sort($clear_result['nextLevel']['nextLevel']['keysContains']);
+		}
+
+		$this->assertEquals($expected_clear, $clear_result);
 
 		$this->assertEquals([null,null,'V3',null], $this->client->getMany(['foo','bar','baz','asd']));
 
