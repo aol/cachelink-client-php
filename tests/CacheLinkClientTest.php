@@ -51,6 +51,14 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	}
 
 	/**
+	 * @expectedException \Aol\CacheLink\CacheLinkServerException
+	 */
+	public function testBadRequest()
+	{
+		$this->client->get('');
+	}
+
+	/**
 	 * @expectedException \Exception
 	 */
 	public function testInvalid()
@@ -64,6 +72,27 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	 */
 	public function testInvalidMany()
 	{
+		$this->redis_client->set('d:invalidMany', '$%^&*(');
+		$this->client->getMany(['invalidMany']);
+	}
+
+
+	/**
+	 * @expectedException \Exception
+	 */
+	public function testInvalidDirect()
+	{
+		$this->client->setupDirectRedis($this->redis_client);
+		$this->redis_client->set('d:invalid', '$%^&*(');
+		$this->client->get('invalid');
+	}
+
+	/**
+	 * @expectedException \Exception
+	 */
+	public function testInvalidManyDirect()
+	{
+		$this->client->setupDirectRedis($this->redis_client);
 		$this->redis_client->set('d:invalidMany', '$%^&*(');
 		$this->client->getMany(['invalidMany']);
 	}

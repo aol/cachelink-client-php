@@ -113,9 +113,6 @@ class CacheLinkClient
 		$result  = null;
 		if ($raw !== null) {
 			$result = unserialize($raw);
-			if ($result === false) {
-				$result = null;
-			}
 		}
 		return $result;
 	}
@@ -140,9 +137,7 @@ class CacheLinkClient
 			foreach ($raw_by_key as $key => $raw) {
 				if ($raw !== null && isset($index_by_key[$key])) {
 					$val = unserialize($raw);
-					if ($val !== false) {
-						$result_by_index[$index_by_key[$key]] = $val;
-					}
+					$result_by_index[$index_by_key[$key]] = $val;
 				}
 			}
 		}
@@ -303,12 +298,12 @@ class CacheLinkClient
 			$request->setQuery($query);
 		}
 
-		$response = $this->client->send($request);
-		$status   = (int)$response->getStatusCode();
-		if (200 !== $status) {
-			throw new CacheLinkServerException($response->getBody(), $status);
+		try {
+			$response = $this->client->send($request);
+			return $response->json();
+		} catch (\GuzzleHttp\Exception\ServerException $ex) {
+			throw new CacheLinkServerException($ex->getMessage(), $ex->getCode(), $ex);
 		}
-		return $response->json();
 	}
 
 	private function requestGet($key)
