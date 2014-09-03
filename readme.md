@@ -1,6 +1,6 @@
 # cachelink PHP client
 
-A PHP client for AOL cachelink.
+A PHP client for AOL [cachelink](https://github.com/aol/cachelink-service).
 
 ## License
 
