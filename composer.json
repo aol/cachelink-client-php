@@ -1,0 +1,25 @@
+{
+	"name": "aol/cachelink-client-php",
+	"description": "A PHP client for the cachelink-service",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "Ralph Khattar",
+			"email": "ralph.khattar@gmail.com"
+		}
+	],
+	"require": {
+		"php": ">=5.4",
+		"guzzlehttp/guzzle": "~4.1.6",
+		"predis/predis": "v0.8.5"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "~3.7.0",
+		"satooshi/php-coveralls": "dev-master"
+	},
+	"autoload": {
+		"psr-4": {
+			"Aol\\CacheLink\\": "src/"
+		}
+	}
+}

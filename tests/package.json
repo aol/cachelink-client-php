@@ -1,0 +1,11 @@
+{
+	"name": "cachelink-client-php-tests",
+	"private": true,
+	"engines": {
+		"node": "^0.10.0"
+	},
+	"version": "1.0.0",
+	"dependencies": {
+		"cachelink-service": "^2.0.1"
+	}
+}

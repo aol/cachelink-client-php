@@ -1,0 +1,9 @@
+.idea
+vendor
+build
+coverage
+composer.lock
+tests/node_modules
+tests/cachelink-server.out
+tests/cachelink-server.pid
+atlassian-ide-plugin.xml
