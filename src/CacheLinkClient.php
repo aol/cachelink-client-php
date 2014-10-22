@@ -17,6 +17,8 @@ class CacheLinkClient implements CacheLinkInterface
 	private $redis_prefix;
 	/** @var string The redis data key prefix. */
 	private $redis_prefix_data;
+	/** @var string The default charset.  */
+	private $current_encoding;
 
 	/**
 	 * Create a new cachelink client.
@@ -26,8 +28,9 @@ class CacheLinkClient implements CacheLinkInterface
 	 */
 	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT)
 	{
-		$this->client  = new Client(['base_url' => $base_url]);
-		$this->timeout = $timeout;
+		$this->current_encoding = mb_internal_encoding();
+		$this->client           = new Client(['base_url' => $base_url]);
+		$this->timeout          = $timeout;
 	}
 
 	/**
@@ -45,6 +48,37 @@ class CacheLinkClient implements CacheLinkInterface
 	}
 
 	/**
+	 * Serialize the given data for storage. The data must be serialized to a UTF-8 string for transport.
+	 *
+	 * @param mixed $data The data to serialize.
+	 *
+	 * @return string The serialized, UTF-8 string.
+	 */
+	protected function serialize($data)
+	{
+		$string = serialize($data);
+		if ($this->current_encoding !== 'UTF-8') {
+			$string = iconv($this->current_encoding, 'UTF-8', $string);
+		}
+		return $string;
+	}
+
+	/**
+	 * Unseralize the given string into an object. The string should be a UTF-8 string.
+	 *
+	 * @param string $string The serialized data string.
+	 *
+	 * @return mixed The unserialized data object.
+	 */
+	protected function unserialize($string)
+	{
+		if ($this->current_encoding !== 'UTF-8') {
+			$string = iconv('UTF-8', $this->current_encoding, $string);
+		}
+		return unserialize($string);
+	}
+
+	/**
 	 * Perform a get directly from redis.
 	 *
 	 * @param string $key The key to get.
@@ -59,7 +93,7 @@ class CacheLinkClient implements CacheLinkInterface
 		if ($serialized_value === null) {
 			$result = null;
 		} else {
-			$result = unserialize($serialized_value);
+			$result = $this->unserialize($serialized_value);
 		}
 		return $result;
 	}
@@ -85,7 +119,7 @@ class CacheLinkClient implements CacheLinkInterface
 			if ($serialized_value === null) {
 				$item = null;
 			} else {
-				$item = unserialize($serialized_value);
+				$item = $this->unserialize($serialized_value);
 			}
 			$results[] = $item;
 		}
@@ -105,7 +139,7 @@ class CacheLinkClient implements CacheLinkInterface
 		$raw     = $this->makeRequest($request, true);
 		$result  = null;
 		if ($raw !== null) {
-			$result = unserialize($raw);
+			$result = $this->unserialize($raw);
 		}
 		return $result;
 	}
@@ -129,7 +163,7 @@ class CacheLinkClient implements CacheLinkInterface
 		if (!empty($raw_by_key) && is_array($raw_by_key)) {
 			foreach ($raw_by_key as $key => $raw) {
 				if ($raw !== null && isset($index_by_key[$key])) {
-					$val = unserialize($raw);
+					$val = $this->unserialize($raw);
 					$result_by_index[$index_by_key[$key]] = $val;
 				}
 			}
@@ -248,7 +282,7 @@ class CacheLinkClient implements CacheLinkInterface
 
 	private function requestSet($key, $value, $millis, array $associations = [], $all_data_centers = false)
 	{
-		$serialized_value = serialize($value);
+		$serialized_value = $this->serialize($value);
 		return $this->client->createRequest('PUT', '/', [
 			'timeout' => $this->timeout,
 			'json'    => [
