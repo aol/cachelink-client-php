@@ -62,10 +62,18 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	/**
 	 * @expectedException \Exception
 	 */
-	public function testInvalid()
+	public function testInvalidGet()
 	{
-		$this->redis_client->set('d:invalid', '$%^&*(');
-		$this->client->get('invalid');
+		$this->redis_client->set('d:invalid_get', '$%^&*(');
+		$this->client->get('invalid_get');
+	}
+
+	/**
+	 * @expectedException \Exception
+	 */
+	public function testInvalidSet()
+	{
+		$this->client->set('invalid_set', function () { }, 1000);
 	}
 
 	/**
