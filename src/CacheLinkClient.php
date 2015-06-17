@@ -67,9 +67,6 @@ class CacheLinkClient implements CacheLinkInterface
 	 */
 	protected function serialize($data)
 	{
-		if ($data === null) {
-			return null;
-		}
 		try {
 			$string = serialize($data);
 		} catch (\Exception $ex) {

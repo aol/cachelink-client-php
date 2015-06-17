@@ -13,9 +13,14 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 
 	protected function setUp()
 	{
-		$this->client = new CacheLinkClient('http://localhost:' . CacheLinkServer::getInstance()->getConfig()->port);
+		$this->client = $this->createClient();
 		$this->redis_client = new \Predis\Client;
 		$this->redis_client->flushdb();
+	}
+
+	private function createClient()
+	{
+		return new CacheLinkClient('http://localhost:' . CacheLinkServer::getInstance()->getConfig()->port);;
 	}
 
 	/**
@@ -49,6 +54,22 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		$this->client->setupDirectRedis($this->redis_client);
 		$this->assertNull($this->client->get('noope'));
 		$this->assertEquals(array_fill(0, 2, null), $this->client->getMany(['no1','no2']));
+	}
+
+	public function testDifferentEncoding()
+	{
+		$old_encoding = mb_internal_encoding();
+		mb_internal_encoding('iso-8859-1');
+		$client = $this->createClient();
+		$client->set('encoding_test', 'foo', 10000);
+		$this->assertEquals('foo', $client->get('encoding_test'));
+		mb_internal_encoding($old_encoding);
+	}
+
+	public function testSetNull()
+	{
+		$this->client->set('set_null', null, 10000);
+		$this->assertNull($this->client->get('set_null'));
 	}
 
 	/**
