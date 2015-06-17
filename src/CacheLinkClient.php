@@ -12,7 +12,9 @@ class CacheLinkClient implements CacheLinkInterface
 	/** @var int The timeout (in seconds) for requests to the cachelink service. */
 	private $timeout;
 	/** @var \Predis\Client The redis client for direct gets. */
-	private $redis_client;
+	private $redis_client_read;
+	/** @var \Predis\Client The redis client for direct sets. */
+	private $redis_client_write;
 	/** @var string The redis key prefix. */
 	private $redis_prefix;
 	/** @var string The redis data key prefix. */
@@ -37,17 +39,23 @@ class CacheLinkClient implements CacheLinkInterface
 
 	/**
 	 * Setup a direct redis client. This will change the behavior of this client to connect
-	 * to redis directly for `get` and `getMany` calls.
+	 * to redis directly for `get` and `getMany` calls if the `redis_client_read` is provided and
+	 * the `set` behavior if `redis_client_write` is provided.
 	 *
-	 * @param \Predis\Client $redis_client The redis client to use.
-	 * @param string         $key_prefix   The cachelink key prefix.
+	 * @param \Predis\Client $redis_client_read   The redis read client to use.
+	 * @param \Predis\Client $redis_client_write  The redis write client to use.
+	 * @param string         $key_prefix          The cachelink key prefix.
 	 */
-	public function setupDirectRedis(\Predis\Client $redis_client, $key_prefix = '')
-	{
-		$this->redis_client      = $redis_client;
-		$this->redis_prefix      = $key_prefix;
-		$this->redis_prefix_data = $key_prefix . 'd:';
-		$this->redis_prefix_in   = $key_prefix . 'i:';
+	public function setupDirectRedis(
+		\Predis\Client $redis_client_read = null,
+		\Predis\Client $redis_client_write = null,
+		$key_prefix = ''
+	) {
+		$this->redis_client_read  = $redis_client_read;
+		$this->redis_client_write = $redis_client_write;
+		$this->redis_prefix       = $key_prefix;
+		$this->redis_prefix_data  = $key_prefix . 'd:';
+		$this->redis_prefix_in    = $key_prefix . 'i:';
 	}
 
 	/**
@@ -106,7 +114,7 @@ class CacheLinkClient implements CacheLinkInterface
 	{
 		// Get the data from cache.
 		// If the result is not `null`, that means there was a hit.
-		$serialized_value = $this->redis_client->get($this->redis_prefix_data . $key);
+		$serialized_value = $this->redis_client_read->get($this->redis_prefix_data . $key);
 		$result = $this->unserialize($serialized_value);
 		return $result;
 	}
@@ -125,8 +133,8 @@ class CacheLinkClient implements CacheLinkInterface
 			$keys_data[] = $this->redis_prefix_data . $key;
 		}
 		$results = [];
-		$serialized_values = $this->redis_client->executeCommand(
-			$this->redis_client->createCommand('mget', $keys_data)
+		$serialized_values = $this->redis_client_read->executeCommand(
+			$this->redis_client_read->createCommand('mget', $keys_data)
 		);
 		foreach ($serialized_values as $serialized_value) {
 			$item = $this->unserialize($serialized_value);
@@ -149,7 +157,7 @@ class CacheLinkClient implements CacheLinkInterface
 		$serialized_value = $this->serialize($value);
 		$key_data         = $this->redis_prefix_data . $key;
 		$key_in           = $this->redis_prefix_in   . $key;
-		$responses        = $this->redis_client->pipeline()
+		$responses        = $this->redis_client_write->pipeline()
 			->set($key_data, $serialized_value, 'px', $millis)
 			->del($key_in)
 			->execute();
@@ -230,7 +238,7 @@ class CacheLinkClient implements CacheLinkInterface
 	public function get($key, array $options = [])
 	{
 		$from_service = isset($options['from_service']) && $options['from_service'] === true;
-		if ($this->redis_client && !$from_service) {
+		if ($this->redis_client_read && !$from_service) {
 			return $this->directGet($key);
 		} else {
 			return $this->serviceGet($key);
@@ -243,7 +251,7 @@ class CacheLinkClient implements CacheLinkInterface
 	public function getMany(array $keys, array $options = [])
 	{
 		$from_service = isset($options['from_service']) && $options['from_service'] === true;
-		if ($this->redis_client && !$from_service) {
+		if ($this->redis_client_read && !$from_service) {
 			return $this->directGetMany($keys);
 		} else {
 			return $this->serviceGetMany($keys);
@@ -258,7 +266,7 @@ class CacheLinkClient implements CacheLinkInterface
 		$from_service = isset($options['from_service']) && $options['from_service'] === true;
 		$broadcast    = isset($options['broadcast']) && $options['broadcast'] === true;
 		$wait         = isset($options['wait']) && $options['wait'] === true;
-		if ($this->redis_client && !$from_service && empty($associations) && !$broadcast) {
+		if ($this->redis_client_write && !$from_service && empty($associations) && !$broadcast) {
 			return $this->directSet($key, $value, $millis);
 		} else {
 			return $this->serviceSet($key, $value, $millis, $associations, $broadcast, $wait);

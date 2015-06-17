@@ -21,11 +21,12 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	/**
 	 * @dataProvider dataSetAndGet
 	 */
-	public function testSetAndGet($direct, $keys_to_vals)
+	public function testSetAndGet($direct_read, $direct_write, $keys_to_vals)
 	{
-		if ($direct) {
-			$this->client->setupDirectRedis($this->redis_client);
-		}
+		$this->client->setupDirectRedis(
+			$direct_read  ? $this->redis_client : null,
+			$direct_write ? $this->redis_client : null
+		);
 
 		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true];
 		foreach ($keys_to_vals as $key => $val) {
@@ -104,8 +105,10 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			'foo2' => [1,2,'hello',false,true,54.3,new \stdClass()]
 		];
 		return [
-			[true, $keys_to_vals],
-			[false, $keys_to_vals]
+			[false, false, $keys_to_vals],
+			[true, false, $keys_to_vals],
+			[false, true, $keys_to_vals],
+			[true, true, $keys_to_vals]
 		];
 	}
 
