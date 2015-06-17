@@ -15,7 +15,7 @@ Add to `composer.json`:
 ```json
 {
     "require": {
-        "aol/cachelink-client-php": "~3.0"
+        "aol/cachelink-client-php": "~4.0"
     }
 }
 ```
