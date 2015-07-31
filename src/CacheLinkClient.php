@@ -3,6 +3,7 @@
 namespace Aol\CacheLink;
 
 use GuzzleHttp\Client;
+use Predis\Response\Status;
 use Psr\Http\Message\RequestInterface;
 
 class CacheLinkClient implements CacheLinkInterface
@@ -158,7 +159,7 @@ class CacheLinkClient implements CacheLinkInterface
 			->set($key_data, $serialized_value, 'px', $millis)
 			->del($key_in)
 			->execute();
-		$success = $responses[0] === true;
+		$success = ($responses[0] instanceof Status && $responses[0]->getPayload() === 'OK');
 		return [
 			'cacheSet'     => $success ? 'OK' : false,
 			'clearAssocIn' => 0,
