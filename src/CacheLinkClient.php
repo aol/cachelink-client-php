@@ -3,7 +3,7 @@
 namespace Aol\CacheLink;
 
 use GuzzleHttp\Client;
-use GuzzleHttp\Message\RequestInterface;
+use Psr\Http\Message\RequestInterface;
 
 class CacheLinkClient implements CacheLinkInterface
 {
@@ -33,7 +33,7 @@ class CacheLinkClient implements CacheLinkInterface
 	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT)
 	{
 		$this->current_encoding = mb_internal_encoding();
-		$this->client           = new Client(['base_url' => $base_url]);
+		$this->client           = new Client(['base_uri' => $base_url]);
 		$this->timeout          = $timeout;
 	}
 
@@ -311,17 +311,18 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @throws CacheLinkServerException If the cachelink service returned an error.
 	 */
-	private function makeRequest(RequestInterface $request, $wait)
+	private function makeRequest(array $request, $wait)
 	{
+		list ($method, $uri, $options) = $request;
 		if (!$wait) {
-			$query = $request->getQuery();
-			$query['background'] = true;
-			$request->setQuery($query);
+			$options['query']['background'] = true;
 		}
 
 		try {
-			$response = $this->client->send($request);
-			return $response->json();
+			/** @var \Psr\Http\Message\ResponseInterface $response */
+			$response = $this->client->request($method, $uri, $options);
+			$contents = $response->getBody()->getContents();
+			return json_decode($contents, true);
 		} catch (\GuzzleHttp\Exception\ServerException $ex) {
 			throw new CacheLinkServerException($ex->getMessage(), $ex->getCode(), $ex);
 		}
@@ -329,22 +330,22 @@ class CacheLinkClient implements CacheLinkInterface
 
 	private function requestGet($key)
 	{
-		return $this->client->createRequest('GET', '/' . urlencode($key), [
+		return ['GET', '/' . urlencode($key), [
 			'timeout' => $this->timeout
-		]);
+		]];
 	}
 
 	private function requestGetMany(array $keys)
 	{
-		return $this->client->createRequest('GET', '/', [
+		return ['GET', '/', [
 			'timeout' => $this->timeout,
 			'query'   => ['k' => $keys]
-		]);
+		]];
 	}
 
 	private function requestSet($key, $value, $millis, array $associations = [], $all_data_centers = false)
 	{
-		return $this->client->createRequest('PUT', '/', [
+		return ['PUT', '/', [
 			'timeout' => $this->timeout,
 			'json'    => [
 				'key'          => $key,
@@ -353,33 +354,33 @@ class CacheLinkClient implements CacheLinkInterface
 				'associations' => $associations,
 				'broadcast'    => !!$all_data_centers
 			]
-		]);
+		]];
 	}
 
 	private function requestClear(array $keys, $levels = self::CLEAR_LEVELS_ALL, $broadcast = true)
 	{
-		return $this->client->createRequest('DELETE', '/', [
+		return ['DELETE', '/', [
 			'timeout' => $this->timeout,
 			'json'    => [
 				'key'    => $keys,
 				'levels' => $levels,
 				'local'  => !$broadcast
 			]
-		]);
+		]];
 	}
 
 	private function requestClearLater(array $keys)
 	{
-		return $this->client->createRequest('PUT', '/clear-later', [
+		return ['PUT', '/clear-later', [
 			'timeout' => $this->timeout,
 			'json'    => ['key' => $keys]
-		]);
+		]];
 	}
 
 	private function requestTriggerClearNow()
 	{
-		return $this->client->createRequest('GET', '/clear-now', [
+		return ['GET', '/clear-now', [
 			'timeout' => $this->timeout
-		]);
+		]];
 	}
 }
