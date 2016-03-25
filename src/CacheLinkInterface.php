@@ -2,12 +2,6 @@
 
 namespace Aol\CacheLink;
 
-const SECONDS = 1000;
-const MINUTES = 60000;
-const HOURS   = 3600000;
-const DAYS    = 86400000;
-const WEEKS   = 604800000;
-
 interface CacheLinkInterface
 {
 	/** Clears all association levels. */
