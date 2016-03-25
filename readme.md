@@ -33,8 +33,11 @@ $cache_service_base_url = 'http://localhost:8899';
 // The timeout in seconds for talking to the service (this is optional).
 $timeout = 3;
 
+// Whether to set detailed data in cachelink for retrieval later (TTL, associations, metadata, etc.).
+$set_detailed = true;
+
 // Create the client.
-$cache = new CacheLinkClient($cache_service_base_url, $timeout);
+$cache = new CacheLinkClient($cache_service_base_url, $timeout, $set_detailed);
 
 // Add a Predis client for direct redis gets.
 $cache->setupDirectRedis(new \Predis\Client(...));
