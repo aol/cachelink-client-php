@@ -15,7 +15,7 @@ Add to `composer.json`:
 ```json
 {
     "require": {
-        "aol/cachelink-client-php": "~6.0"
+        "aol/cachelink-client-php": "~7.0"
     }
 }
 ```
@@ -43,10 +43,40 @@ $cache->setupDirectRedis(new \Predis\Client(...));
 $cache->set('foo', 'bar', 3000);
 
 // Get a value - outputs "bar".
-echo $cache->get('foo');
+echo $cache->get('foo')->getValue();
 
 // Clear "foo".
 $cache->clear(['foo']);
+```
+
+### Get Many
+
+```php
+$cache = new CacheLinkClient(...);
+
+$items = $cache->getMany(['foo', 'bar', 'baz']);
+
+foreach ($items as $item) {
+	$item->getKey();          // The cache key for the item.
+	$item->isHit();           // Whether the item is a cache hit.
+	$item->isMiss();          // Whether the item is a cache miss.
+	$item->getValue();        // The value from cache, null if there was none.
+	$item->getTtlMillis();    // The item's original TTL in millis or null if none.
+	$item->getMetadata();     // The item's original metadata or an empty array if none.
+	$item->getAssociations(); // The item's original associations or an empty array if none.
+}
+```
+
+### Simple Gets
+
+```php
+$cache = new CacheLinkClient(...);
+
+// Get the value for the "foo" key from cache or null if a miss.
+$value = $cache->getSimple('foo');
+
+// Get the values for the "foo", "bar", and "baz" keys from cache or nulls if misses.
+$values = $cache->getManySimple(['foo', 'bar', 'baz']);
 ```
 
 ## License

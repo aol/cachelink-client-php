@@ -15,8 +15,6 @@ interface CacheLinkInterface
 	 * Get the value for the given key. This will attempt to use redis directly if
 	 * `setupDirectRedis` was previously called.
 	 *
-	 * @deprecated Use get
-	 *
 	 * @param string $key     The key to get.
 	 * @param array  $options A set of options for the get.
 	 * <code>
@@ -32,8 +30,6 @@ interface CacheLinkInterface
 	/**
 	 * Get the values for the given keys. This will attempt to use redis directly if
 	 * `setupDirectRedis` was previously called.
-	 *
-	 * @deprecated Use getMany
 	 *
 	 * @param string[] $keys The keys to get.
 	 * @param array  $options A set of options for the get.
