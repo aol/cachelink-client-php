@@ -21,6 +21,8 @@ interface CacheLinkInterface
 	 * Get the value for the given key. This will attempt to use redis directly if
 	 * `setupDirectRedis` was previously called.
 	 *
+	 * @deprecated Use get
+	 *
 	 * @param string $key     The key to get.
 	 * @param array  $options A set of options for the get.
 	 * <code>
@@ -30,6 +32,41 @@ interface CacheLinkInterface
 	 * </code>
 	 *
 	 * @return mixed|null The value or null if there is none.
+	 */
+	function getSimple($key, array $options = []);
+
+	/**
+	 * Get the values for the given keys. This will attempt to use redis directly if
+	 * `setupDirectRedis` was previously called.
+	 *
+	 * @deprecated Use getMany
+	 *
+	 * @param string[] $keys The keys to get.
+	 * @param array  $options A set of options for the get.
+	 * <code>
+	 * [
+	 *    'from_service' => true|false (default false) -
+	 *                      whether to force the use of the service to perform the multi-get
+	 * ]
+	 * </code>
+	 *
+	 * @return array The array of values in the same order as the keys.
+	 */
+	function getManySimple(array $keys, array $options = []);
+
+	/**
+	 * Get the value for the given key. This will attempt to use redis directly if
+	 * `setupDirectRedis` was previously called.
+	 *
+	 * @param string $key     The key to get.
+	 * @param array  $options A set of options for the get.
+	 * <code>
+	 * [
+	 *   'from_service' => true|false - whether to force the use of the service to perform the get
+	 * ]
+	 * </code>
+	 *
+	 * @return CacheLinkItem The value or null if there is none.
 	 */
 	function get($key, array $options = []);
 
@@ -46,7 +83,7 @@ interface CacheLinkInterface
 	 * ]
 	 * </code>
 	 *
-	 * @return array The array of values in the same order as the keys.
+	 * @return CacheLinkItem[] The array of values in the same order as the keys.
 	 */
 	function getMany(array $keys, array $options = []);
 
@@ -58,6 +95,7 @@ interface CacheLinkInterface
 	 * @param int    $millis       TTL in millis.
 	 * @param array  $associations The keys to associate (optional).
 	 * @param array  $options      Options for the set.
+	 * @param array  $metadata     Metadata for this item.
 	 * <code>
 	 * [
 	 *    'broadcast' => true|false (default false) - whether to broadcast the set to all data centers.
@@ -67,7 +105,7 @@ interface CacheLinkInterface
 	 *
 	 * @return mixed The result information of the set.
 	 */
-	function set($key, $value, $millis, array $associations = [], array $options = []);
+	function set($key, $value, $millis, array $associations = [], array $options = [], array $metadata = []);
 
 	/**
 	 * Immediately clear the given keys and optionally their associations.

@@ -10,18 +10,38 @@ class CacheLinkMemory implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
+	public function getSimple($key, array $options = [])
+	{
+		return $this->get($key, $options)->getValue();
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getManySimple(array $keys, array $options = [])
+	{
+		$results = [];
+		foreach ($keys as $key) {
+			$results[] = $this->getSimple($key);
+		}
+		return $results;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
 	public function get($key, array $options = [])
 	{
 		if (isset($this->memory[$key])) {
 			$val = $this->memory[$key];
 			$now = time();
 			if ($now <= $val['timeout']) {
-				return $val['data'];
+				return CacheLinkItem::thaw($key, $val['data']);
 			} else {
 				unset($this->memory[$key]);
 			}
 		}
-		return null;
+		return new CacheLinkItem($key, null, null, [], []);
 	}
 
 	/**
@@ -39,11 +59,12 @@ class CacheLinkMemory implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function set($key, $value, $millis, array $associations = [], array $options = [])
+	public function set($key, $value, $millis, array $associations = [], array $options = [], array $metadata = [])
 	{
+		$item = new CacheLinkItem($key, $value, $millis, $associations, $metadata);
 		$this->memory[$key] = [
 			'timeout' => time() + (int)($millis / 1000),
-			'data'    => $value
+			'data'    => $item->freeze()
 		];
 		return ['background' => true];
 	}

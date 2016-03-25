@@ -3,6 +3,7 @@
 namespace Aol\CacheLink\Tests;
 
 use Aol\CacheLink\CacheLinkBypass;
+use Aol\CacheLink\CacheLinkItem;
 
 class CacheLinkBypassTest extends \PHPUnit_Framework_TestCase
 {
@@ -21,16 +22,58 @@ class CacheLinkBypassTest extends \PHPUnit_Framework_TestCase
 
 	public function testGet()
 	{
-		$this->assertEquals(null, $this->cache->get('foo'));
+		/** @var CacheLinkItem $val */
+		$val = $this->cache->get('foo');
+		$this->assertInstanceOf(CacheLinkItem::class, $val);
+		$this->assertTrue($val->isMiss());
+		$this->assertFalse($val->isHit());
+		$this->assertNull($val->getValue());
+
 		$this->cache->set('foo', 'bar', 10000, [], ['wait' => true]);
-		$this->assertEquals(null, $this->cache->get('foo'));
+
+		/** @var CacheLinkItem $val */
+		$val = $this->cache->get('foo');
+		$this->assertInstanceOf(CacheLinkItem::class, $val);
+		$this->assertTrue($val->isMiss());
+		$this->assertFalse($val->isHit());
+		$this->assertNull($val->getValue());
 	}
 
 	public function testGetMany()
 	{
-		$this->assertEquals(array_fill(0, 3, null), $this->cache->getMany(['foo','bar','baz']));
+		$vals = $this->cache->getMany(['foo','bar','baz']);
+		/** @var CacheLinkItem $val */
+		foreach ($vals as $val) {
+			$this->assertInstanceOf(CacheLinkItem::class, $val);
+			$this->assertTrue($val->isMiss());
+			$this->assertFalse($val->isHit());
+			$this->assertNull($val->getValue());
+		}
+
 		$this->cache->set('foo', 'bar', 10000, [], ['wait' => true]);
-		$this->assertEquals(array_fill(0, 3, null), $this->cache->getMany(['foo','bar','baz']));
+
+		$vals = $this->cache->getMany(['foo','bar','baz']);
+		/** @var CacheLinkItem $val */
+		foreach ($vals as $val) {
+			$this->assertInstanceOf(CacheLinkItem::class, $val);
+			$this->assertTrue($val->isMiss());
+			$this->assertFalse($val->isHit());
+			$this->assertNull($val->getValue());
+		}
+	}
+
+	public function testGetSimple()
+	{
+		$this->assertEquals(null, $this->cache->getSimple('foo'));
+		$this->cache->set('foo', 'bar', 10000, [], ['wait' => true]);
+		$this->assertEquals(null, $this->cache->getSimple('foo'));
+	}
+
+	public function testGetManySimple()
+	{
+		$this->assertEquals(array_fill(0, 3, null), $this->cache->getManySimple(['foo','bar','baz']));
+		$this->cache->set('foo', 'bar', 10000, [], ['wait' => true]);
+		$this->assertEquals(array_fill(0, 3, null), $this->cache->getManySimple(['foo','bar','baz']));
 	}
 
 	public function testClear()
