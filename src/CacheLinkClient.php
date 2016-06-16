@@ -161,9 +161,10 @@ class CacheLinkClient implements CacheLinkInterface
 			->execute();
 		$success = ($responses[0] instanceof Status && $responses[0]->getPayload() === 'OK');
 		return [
-			'cacheSet'     => $success ? 'OK' : false,
-			'clearAssocIn' => 0,
-			'success'      => $success
+			'cacheSet'        => $success ? 'OK' : false,
+			'clearAssocIn'    => 0,
+			'success'         => $success,
+			'broadcastResult' => null,
 		];
 	}
 

@@ -33,7 +33,7 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			$direct_write ? $this->redis_client : null
 		);
 
-		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true];
+		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
 		foreach ($keys_to_vals as $key => $val) {
 			$result_set = $this->client->set($key, $val, 10000, [], ['wait' => true]);
 			$this->assertEquals($ok_set, $result_set);
@@ -143,7 +143,7 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 
 	public function testClear()
 	{
-		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true];
+		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
 		$this->assertEquals($ok_set, $this->client->set('foo', 'bar', 100000, [], ['wait' => true]));
 		$this->assertEquals('bar', $this->client->get('foo'));
 
@@ -158,7 +158,8 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 				'removedFromContains' => 0,
 				'keysInDeleted' => 0,
 				'keysNextLevel' => [],
-				'allKeysCleared' => ['foo']
+				'allKeysCleared' => ['foo'],
+				'broadcastResult' => null,
 			],
 			$this->client->clear(['foo'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true])
 		);
@@ -167,7 +168,7 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 
 	public function testClearAssociations()
 	{
-		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true];
+		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
 		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('foo', 'V1', 100000, ['bar','baz'], ['wait' => true])));
 		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('bar', 'V2', 100000, ['asd'], ['wait' => true])));
 		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true])));
@@ -206,7 +207,8 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 					'keysNextLevel' => []
 				],
 			],
-			'allKeysCleared' => ['asd','bar','foo']
+			'allKeysCleared' => ['asd','bar','foo'],
+			'broadcastResult' => null,
 		];
 
 		$clear_result = $this->client->clear(['asd'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true]);
@@ -232,7 +234,8 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 				'removedFromContains' => 0,
 				'keysInDeleted' => 0,
 				'keysNextLevel' => [],
-				'allKeysCleared' => ['baz']
+				'allKeysCleared' => ['baz'],
+				'broadcastResult' => null,
 			],
 			$this->client->clear(['baz'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true])
 		);
@@ -240,7 +243,7 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 
 	public function testClearLater()
 	{
-		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true];
+		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
 		$this->assertEquals($ok_set, $this->client->set('foo', 'V1', 100000, [], ['wait' => true]));
 		$this->assertEquals($ok_set, $this->client->set('bar', 'V2', 100000, [], ['wait' => true]));
 		$this->assertEquals($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true]));
