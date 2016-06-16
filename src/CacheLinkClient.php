@@ -24,18 +24,22 @@ class CacheLinkClient implements CacheLinkInterface
 	private $redis_prefix_in;
 	/** @var string The default charset.  */
 	private $current_encoding;
+	/** @var bool Whether to set detailed data in cachelink (TTL, associations, metadata, etc.) */
+	private $set_detailed;
 
 	/**
 	 * Create a new cachelink client.
 	 *
-	 * @param string $base_url The base URL for talking to the cachelink service.
-	 * @param int    $timeout  The HTTP timeout in seconds for the cachelink service response (defaults to 5 seconds).
+	 * @param string $base_url     The base URL for talking to the cachelink service.
+	 * @param int    $timeout      The HTTP timeout in seconds for the cachelink service response (defaults to 5 seconds).
+	 * @pram  bool   $set_detailed Whether to set detailed data in cachelink (TTL, associations, metadata, etc.)
 	 */
-	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT)
+	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT, $set_detailed = true)
 	{
 		$this->current_encoding = mb_internal_encoding();
 		$this->client           = new Client(['base_uri' => $base_url]);
 		$this->timeout          = $timeout;
+		$this->set_detailed     = $set_detailed;
 	}
 
 	/**
@@ -57,6 +61,14 @@ class CacheLinkClient implements CacheLinkInterface
 		$this->redis_prefix       = $key_prefix;
 		$this->redis_prefix_data  = $key_prefix . 'd:';
 		$this->redis_prefix_in    = $key_prefix . 'i:';
+	}
+
+	/**
+	 * @return bool Whether detailed sets are enabled.
+	 */
+	public function hasDetailedSetsEnabled()
+	{
+		return $this->set_detailed;
 	}
 
 	/**
@@ -106,15 +118,15 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @param string $key The key to get.
 	 *
-	 * @return mixed|null The value or null if there is none.
+	 * @return CacheLinkItem The value or null if there is none.
 	 */
 	protected function directGet($key)
 	{
 		// Get the data from cache.
-		// If the result is not `null`, that means there was a hit.
 		$serialized_value = $this->redis_client_read->get($this->redis_prefix_data . $key);
-		$result = $this->unserialize($serialized_value);
-		return $result;
+		$val              = $this->unserialize($serialized_value);
+		$item             = CacheLinkItem::thaw($key, $val);
+		return $item;
 	}
 
 	/**
@@ -122,7 +134,7 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @param string[] $keys The keys to get.
 	 *
-	 * @return array The array of values in the same order as the keys.
+	 * @return CacheLinkItem[] The array of values in the same order as the keys.
 	 */
 	protected function directGetMany(array $keys)
 	{
@@ -134,25 +146,86 @@ class CacheLinkClient implements CacheLinkInterface
 		$serialized_values = $this->redis_client_read->executeCommand(
 			$this->redis_client_read->createCommand('mget', $keys_data)
 		);
-		foreach ($serialized_values as $serialized_value) {
-			$item = $this->unserialize($serialized_value);
+		foreach ($serialized_values as $index => $serialized_value) {
+			$val       = $this->unserialize($serialized_value);
+			$item      = CacheLinkItem::thaw($keys[$index], $val);
 			$results[] = $item;
 		}
 		return $results;
 	}
 
 	/**
+	 * Perform a get from the cachelink service.
+	 *
+	 * @param string $key The key to get.
+	 *
+	 * @return CacheLinkItem The value or null if there is none.
+	 */
+	protected function serviceGet($key)
+	{
+		$request = $this->requestGet($key);
+		$raw     = $this->makeRequest($request, true);
+		$val     = $this->unserialize($raw);
+		$item    = CacheLinkItem::thaw($key, $val);
+		return $item;
+	}
+
+	/**
+	 * Perform a multi-get from the cachelink service.
+	 *
+	 * @param string[] $keys The keys to get.
+	 *
+	 * @return CacheLinkItem[] The array of values in the same order as the keys.
+	 */
+	protected function serviceGetMany(array $keys)
+	{
+		$index_by_key  = [];
+		foreach ($keys as $i => $key) {
+			$index_by_key[$key] = $i;
+		}
+		$request         = $this->requestGetMany($keys);
+		$raw_by_key      = $this->makeRequest($request, true);
+		$result_by_index = array_fill(0, count($keys), null);
+		if (!empty($raw_by_key) && is_array($raw_by_key)) {
+			foreach ($raw_by_key as $key => $raw) {
+				if ($raw !== null && isset($index_by_key[$key])) {
+					$val                     = $this->unserialize($raw);
+					$item                    = CacheLinkItem::thaw($key, $val);
+					$index                   = $index_by_key[$key];
+					$result_by_index[$index] = $item;
+				}
+			}
+		}
+		$result = [];
+		foreach ($result_by_index as $index => $item) {
+			if ($item === null) {
+				$result[] = new CacheLinkItem($keys[$index], null, null, [], []);
+			} else {
+				$result[] = $item;
+			}
+		}
+		return $result;
+	}
+
+	/**
 	 * Perform a set directly to redis.
 	 *
-	 * @param string $key    The key to set.
-	 * @param mixed  $value  The value to set.
-	 * @param int    $millis How long to keep the value in cache.
+	 * @param string $key      The key to set.
+	 * @param mixed  $value    The value to set.
+	 * @param int    $millis   How long to keep the value in cache.
+	 * @param array  $metadata The metadata for the set.
 	 *
 	 * @return mixed The result information of the set.
 	 */
-	protected function directSet($key, $value, $millis)
+	protected function directSet($key, $value, $millis, $metadata = [])
 	{
-		$serialized_value = $this->serialize($value);
+		if ($this->set_detailed) {
+			$item   = new CacheLinkItem($key, $value, $millis, [], $metadata);
+			$frozen = $item->freeze();
+		} else {
+			$frozen = $value;
+		}
+		$serialized_value = $this->serialize($frozen);
 		$key_data         = $this->redis_prefix_data . $key;
 		$key_in           = $this->redis_prefix_in   . $key;
 		$responses        = $this->redis_client_write->pipeline()
@@ -169,54 +242,13 @@ class CacheLinkClient implements CacheLinkInterface
 	}
 
 	/**
-	 * Perform a get from the cachelink service.
-	 *
-	 * @param string $key The key to get.
-	 *
-	 * @return mixed|null The value or null if there is none.
-	 */
-	protected function serviceGet($key)
-	{
-		$request = $this->requestGet($key);
-		$raw     = $this->makeRequest($request, true);
-		$result  = $this->unserialize($raw);
-		return $result;
-	}
-
-	/**
-	 * Perform a multi-get from the cachelink service.
-	 *
-	 * @param string[] $keys The keys to get.
-	 *
-	 * @return array The array of values in the same order as the keys.
-	 */
-	protected function serviceGetMany(array $keys)
-	{
-		$index_by_key  = [];
-		foreach ($keys as $i => $key) {
-			$index_by_key[$key] = $i;
-		}
-		$request         = $this->requestGetMany($keys);
-		$raw_by_key      = $this->makeRequest($request, true);
-		$result_by_index = array_fill(0, count($keys), null);
-		if (!empty($raw_by_key) && is_array($raw_by_key)) {
-			foreach ($raw_by_key as $key => $raw) {
-				if ($raw !== null && isset($index_by_key[$key])) {
-					$val = $this->unserialize($raw);
-					$result_by_index[$index_by_key[$key]] = $val;
-				}
-			}
-		}
-		return $result_by_index;
-	}
-
-	/**
 	 * Perform a set using the cachelink service.
 	 *
 	 * @param string $key          The key to set.
 	 * @param mixed  $value        The value to set.
 	 * @param int    $millis       How long to cache the value.
 	 * @param array  $associations The associations for the set.
+	 * @param array  $metadata     The metadata for the set.
 	 * @param bool   $broadcast    Whether to broadcast the set to all data centers.
 	 * @param bool   $wait         Whether to wait for the result from the service.
 	 *
@@ -224,11 +256,38 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @throws CacheLinkServerException
 	 */
-	protected function serviceSet($key, $value, $millis, $associations, $broadcast, $wait)
+	protected function serviceSet($key, $value, $millis, $associations, $metadata, $broadcast, $wait)
 	{
-		$serialized_value = $this->serialize($value);
+		if ($this->set_detailed) {
+			$item   = new CacheLinkItem($key, $value, $millis, $associations, $metadata);
+			$frozen = $item->freeze();
+		} else {
+			$frozen = $value;
+		}
+		$serialized_value = $this->serialize($frozen);
 		$request = $this->requestSet($key, $serialized_value, $millis, $associations, $broadcast);
 		return $this->makeRequest($request, $wait);
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getSimple($key, array $options = [])
+	{
+		return $this->get($key, $options)->getValue();
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getManySimple(array $keys, array $options = [])
+	{
+		$items = $this->getMany($keys, $options);
+		$values = [];
+		foreach ($items as $item) {
+			$values[] = $item->getValue();
+		}
+		return $values;
 	}
 
 	/**
@@ -260,15 +319,15 @@ class CacheLinkClient implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function set($key, $value, $millis, array $associations = [], array $options = [])
+	public function set($key, $value, $millis, array $associations = [], array $options = [], array $metadata = [])
 	{
 		$from_service = isset($options['from_service']) && $options['from_service'] === true;
 		$broadcast    = isset($options['broadcast']) && $options['broadcast'] === true;
 		$wait         = isset($options['wait']) && $options['wait'] === true;
 		if ($this->redis_client_write && !$from_service && empty($associations) && !$broadcast) {
-			return $this->directSet($key, $value, $millis);
+			return $this->directSet($key, $value, $millis, $metadata);
 		} else {
-			return $this->serviceSet($key, $value, $millis, $associations, $broadcast, $wait);
+			return $this->serviceSet($key, $value, $millis, $associations, $metadata, $broadcast, $wait);
 		}
 	}
 

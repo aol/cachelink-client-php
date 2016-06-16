@@ -7,7 +7,7 @@ class CacheLinkBypass implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function get($key, array $options = [])
+	public function getSimple($key, array $options = [])
 	{
 		return null;
 	}
@@ -15,7 +15,7 @@ class CacheLinkBypass implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function getMany(array $keys, array $options = [])
+	public function getManySimple(array $keys, array $options = [])
 	{
 		return array_fill(0, count($keys), null);
 	}
@@ -23,7 +23,27 @@ class CacheLinkBypass implements CacheLinkInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function set($key, $value, $millis, array $associations = [], array $options = [])
+	public function get($key, array $options = [])
+	{
+		return new CacheLinkItem($key, null, null, [], []);
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function getMany(array $keys, array $options = [])
+	{
+		$result = [];
+		foreach ($keys as $key) {
+			$result[] = new CacheLinkItem($key, null, null, [], []);
+		}
+		return $result;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function set($key, $value, $millis, array $associations = [], array $options = [], array $metadata = [])
 	{
 		return ['background' => true];
 	}
