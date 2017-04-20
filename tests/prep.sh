@@ -22,7 +22,3 @@ $CACHELINK_DIR/test/env/start-cluster.sh
 # Run cachelink instances.
 docker-compose stop
 docker-compose up -d
-
-# Build PHP container for running tests.
-docker rm -f cachelink_client_test
-docker build . -t cachelink_client_test
