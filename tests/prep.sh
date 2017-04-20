@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-APP=$DIR/..
+APP=$(dirname $DIR)
 CACHELINK_DIR=$DIR/node_modules/cachelink-service
 
 cd $DIR
@@ -12,8 +12,6 @@ docker run -it --rm \
 	-w /tests \
 	node:6 \
 	npm install
-
-mkdir -p $CACHELINK_DIR/build
 
 # Start redis single and redis cluster instances.
 $CACHELINK_DIR/test/env/start-single.sh
