@@ -1,0 +1,23 @@
+version: '3'
+services:
+
+  cachelink_single:
+    image: node:6
+    network_mode: host
+    volumes:
+      - $PWD:/app
+    entrypoint: /app/node_modules/cachelink-service/bin/cachelink
+    environment:
+      CACHELINK_PORT: "61111"
+      CACHELINK_REDIS_NODES: "localhost:6379"
+
+  cachelink_cluster:
+    image: node:6
+    network_mode: host
+    volumes:
+      - $PWD:/app
+    entrypoint: /app/node_modules/cachelink-service/bin/cachelink
+    environment:
+      CACHELINK_PORT: "61112"
+      CACHELINK_REDIS_NODES: "127.0.0.1:7001;127.0.0.1:7002;127.0.0.1:7003"
+      CACHELINK_REDIS_CLUSTER: "true"

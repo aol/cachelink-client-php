@@ -6,6 +6,6 @@
 	},
 	"version": "1.0.0",
 	"dependencies": {
-		"cachelink-service": "^4.0"
+		"cachelink-service": "^6.0"
 	}
 }
