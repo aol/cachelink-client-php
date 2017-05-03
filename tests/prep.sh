@@ -13,6 +13,12 @@ docker run -it --rm \
 	node:6 \
 	npm install
 
+# Ensure build directory exists.
+if [ ! -d "$CACHELINK_DIR/build" ]; then
+  echo "Build directory ($CACHELINK_DIR/build) does not exist, cannot start redis.";
+  exit 1;
+fi
+
 # Start redis single and redis cluster instances.
 $CACHELINK_DIR/test/env/start-single.sh
 $CACHELINK_DIR/test/env/start-cluster.sh
