@@ -4,8 +4,9 @@ namespace Aol\CacheLink\Tests;
 
 use Aol\CacheLink\CacheLinkClient;
 use Aol\CacheLink\CacheLinkItem;
+use Predis\Client;
 
-class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
+abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 {
 	/** @var CacheLinkClient */
 	protected $client;
@@ -15,14 +16,19 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	protected function setUp()
 	{
 		$this->client = $this->createClient();
-		$this->redis_client = new \Predis\Client;
-		$this->redis_client->flushdb();
+		$this->redis_client = $this->createRedisClient();
+		$this->flushRedis($this->redis_client);
 	}
 
-	private function createClient($set_detailed = true)
+	protected abstract function getPort();
+	protected abstract function createRedisClient();
+	protected abstract function flushRedis(Client $redis_client);
+	protected abstract function getAllRedisData(Client $redis_client);
+
+	protected function createClient($set_detailed = true)
 	{
 		return new CacheLinkClient(
-			'http://localhost:' . CacheLinkServer::getInstance()->getConfig()->port,
+			'http://localhost:' . $this->getPort(),
 			CacheLinkClient::DEFAULT_TIMEOUT,
 			$set_detailed
 		);
@@ -38,7 +44,14 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			$direct_write ? $this->redis_client : null
 		);
 
+		$r=$direct_read?'direct_read':'service_read';
+		$w=$direct_write?'direct_write':'service_write';
+		$t="testSetAndGet($r/$w)";
+
 		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
+		if ($direct_write) {
+			$ok_set['directSet'] = true;
+		}
 		foreach ($keys_to_vals as $key => $val) {
 			$result_set = $this->client->set($key, $val, 10000, [], ['wait' => true]);
 			$this->assertEquals($ok_set, $result_set);
@@ -169,6 +182,18 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		$this->assertNull($this->client->getSimple('set_null'));
 	}
 
+	public function testRedisSetsAreVisible()
+	{
+		$client1 = $this->createClient(true);
+		$client2 = $this->createClient(true);
+		$redis = $this->createRedisClient();
+		$client1->setupDirectRedis($redis, $redis);
+		$client1->set('simple_key1', 'simple_value1', 100000, [], []);
+		$client2->set('simple_key2', 'simple_value2', 100000, [], []);
+		$this->assertEquals('simple_value1', $client2->getSimple('simple_key1'));
+		$this->assertEquals('simple_value2', $client1->getSimple('simple_key2'));
+	}
+
 	/**
 	 * @expectedException \Aol\CacheLink\CacheLinkServerException
 	 */
@@ -231,24 +256,24 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			'foo2' => [1,2,'hello',false,true,54.3,new \stdClass()]
 		];
 		return [
-			[false, false, $keys_to_vals],
-			[true, false, $keys_to_vals],
-			[false, true, $keys_to_vals],
-			[true, true, $keys_to_vals]
+			'read from service, write to service' => [false, false, $keys_to_vals],
+			'read from redis, write to service' => [true, false, $keys_to_vals],
+			'read from service, write to redis' => [false, true, $keys_to_vals],
+			'read from redis, write to redis' => [true, true, $keys_to_vals]
 		];
 	}
 
 	public function dataDetailedSettingCompatibility()
 	{
-		$redis = new \Predis\Client;
-		$redis->flushdb();
+		$redis = $this->createRedisClient();
+		$this->flushRedis($redis);
 		$client_detailed = $this->createClient(true);
 		$client_detailed->setupDirectRedis($redis, $redis);
 		$client_not_detailed = $this->createClient(false);
 		$client_not_detailed->setupDirectRedis($redis, $redis);
 		return [
-			[$client_detailed, $client_not_detailed],
-			[$client_not_detailed, $client_detailed]
+			'detailed set, non-detailed read' => [$client_detailed, $client_not_detailed],
+			'non-detailed set, detailed read' => [$client_not_detailed, $client_detailed]
 		];
 	}
 
@@ -260,10 +285,10 @@ class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			'baz' => ['bazval', 1000000000, ['bazassoc'], ['bazmeta' => 'bazmetaval']],
 		];
 		return [
-			[false, false, $set],
-			[true, false, $set],
-			[false, true, $set],
-			[true, true, $set]
+			'read from service, write to service' => [false, false, $set],
+			'read from redis, write to service' => [true, false, $set],
+			'read from service, write to redis' => [false, true, $set],
+			'read from redis, write to redis' => [true, true, $set]
 		];
 	}
 

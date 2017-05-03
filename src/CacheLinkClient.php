@@ -3,7 +3,6 @@
 namespace Aol\CacheLink;
 
 use GuzzleHttp\Client;
-use Predis\Response\Status;
 use Psr\Http\Message\RequestInterface;
 
 class CacheLinkClient implements CacheLinkInterface
@@ -138,6 +137,12 @@ class CacheLinkClient implements CacheLinkInterface
 	 */
 	protected function directGetMany(array $keys)
 	{
+		// If the read connection is using redis cluster,
+		// use normal GET commands as MGET is not supported.
+		if ($this->isRedisCluster($this->redis_client_read)) {
+			return array_map([$this, 'directGet'], $keys);
+		}
+
 		$keys_data = [];
 		foreach ($keys as $key) {
 			$keys_data[] = $this->redis_prefix_data . $key;
@@ -228,16 +233,35 @@ class CacheLinkClient implements CacheLinkInterface
 		$serialized_value = $this->serialize($frozen);
 		$key_data         = $this->redis_prefix_data . $key;
 		$key_in           = $this->redis_prefix_in   . $key;
-		$responses        = $this->redis_client_write->pipeline()
-			->set($key_data, $serialized_value, 'px', $millis)
-			->del($key_in)
-			->execute();
-		$success = ($responses[0] instanceof Status && $responses[0]->getPayload() === 'OK');
+		$client           = $this->redis_client_write;
+
+		$commands = [
+			$client->createCommand('set', [$key_data, $serialized_value, 'px', $millis]),
+			$client->createCommand('del', [$key_in]),
+		];
+
+		// If the write connection is using redis cluster,
+		// do not use pipelining, as the keys may be on two different nodes.
+		if ($this->isRedisCluster($client)) {
+			$responses = [];
+			foreach ($commands as $command) {
+				$responses[] = $client->executeCommand($command);
+			}
+		} else {
+			$pipeline = $client->pipeline();
+			foreach ($commands as $command) {
+				$pipeline->executeCommand($command);
+			}
+			$responses = $pipeline->execute();
+		}
+
+		$success = ($responses[0] instanceof \Predis\Response\Status && $responses[0]->getPayload() === 'OK');
 		return [
 			'cacheSet'        => $success ? 'OK' : false,
 			'clearAssocIn'    => 0,
 			'success'         => $success,
 			'broadcastResult' => null,
+            'directSet'       => true,
 		];
 	}
 
@@ -443,5 +467,11 @@ class CacheLinkClient implements CacheLinkInterface
 		return ['GET', '/clear-now', [
 			'timeout' => $this->timeout
 		]];
+	}
+
+	private function isRedisCluster(\Predis\Client $client)
+	{
+		$connection = $client->getConnection();
+		return $connection instanceof \Predis\Connection\Aggregate\RedisCluster;
 	}
 }
