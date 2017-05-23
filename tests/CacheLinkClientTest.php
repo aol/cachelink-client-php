@@ -4,6 +4,7 @@ namespace Aol\CacheLink\Tests;
 
 use Aol\CacheLink\CacheLinkClient;
 use Aol\CacheLink\CacheLinkItem;
+use Aol\CacheLink\Exceptions\CacheLinkUnserializeException;
 use Predis\Client;
 
 abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
@@ -25,12 +26,11 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	protected abstract function flushRedis(Client $redis_client);
 	protected abstract function getAllRedisData(Client $redis_client);
 
-	protected function createClient($set_detailed = true)
+	protected function createClient()
 	{
 		return new CacheLinkClient(
 			'http://localhost:' . $this->getPort(),
-			CacheLinkClient::DEFAULT_TIMEOUT,
-			$set_detailed
+			CacheLinkClient::DEFAULT_TIMEOUT
 		);
 	}
 
@@ -54,17 +54,17 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		}
 		foreach ($keys_to_vals as $key => $val) {
 			$result_set = $this->client->set($key, $val, 10000, [], ['wait' => true]);
-			$this->assertEquals($ok_set, $result_set);
+			self::assertEquals($ok_set, $result_set);
 		}
 
 		$keys = array_keys($keys_to_vals);
 		$vals = array_values($keys_to_vals);
 
 		$result_get = $this->client->getSimple($keys[0]);
-		$this->assertEquals($vals[0], $result_get);
+		self::assertEquals($vals[0], $result_get);
 
 		$result_get_many = $this->client->getManySimple($keys);
-		$this->assertEquals($vals, $result_get_many);
+		self::assertEquals($vals, $result_get_many);
 	}
 
 	/**
@@ -86,84 +86,35 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		];
 		foreach ($set as $key => $p) {
 			$result_set = $this->client->set($key, $p[0], $p[1], $p[2], ['wait' => true], $p[3]);
-			$this->assertEquals($ok_set, array_intersect_key($ok_set, $result_set));
+			self::assertEquals($ok_set, array_intersect_key($ok_set, $result_set));
 		}
 
 		$keys = array_keys($set);
 		$ps = array_values($set);
 
 		$result_get = $this->client->getSimple($keys[0]);
-		$this->assertEquals($ps[0][0], $result_get);
+		self::assertEquals($ps[0][0], $result_get);
 
 		$result_get_many = $this->client->getMany($keys);
 		foreach ($keys as $i => $key) {
 			/** @var CacheLinkItem $item */
 			$item = $result_get_many[$i];
 			$p = $ps[$i];
-			$this->assertInstanceOf(CacheLinkItem::class, $item);
-			$this->assertTrue($item->isHit());
-			$this->assertEquals($key, $item->getKey());
-			$this->assertEquals($p[0], $item->getValue());
-			$this->assertEquals($p[1], $item->getTtlMillis());
-			$this->assertEquals($p[2], $item->getAssociations());
-			$this->assertEquals($p[3], $item->getMetadata());
-		}
-	}
-
-	/**
-	 * @dataProvider dataDetailedSettingCompatibility
-	 */
-	public function testDetailedSettingCompatibility(CacheLinkClient $client1, CacheLinkClient $client2)
-	{
-		$dets = [
-			['det1', 'det1v', 1000000, ['det1a'], ['det1m' => 'det1mv']],
-			['det2', 'det2v', 1000000, ['det2a'], ['det2m' => 'det2mv']],
-			['det3', 'det3v', 1000000, [], []]
-		];
-		foreach ($dets as $deti) {
-			$client1->set($deti[0], $deti[1], $deti[2], $deti[3], [], $deti[4]);
-		}
-		foreach ($dets as $deti) {
-			$this->assertEquals($deti[1], $client2->getSimple($deti[0]));
-		}
-		$keys = array_map(function ($det) { return $det[0]; }, $dets);
-		$vals = array_map(function ($det) { return $det[1]; }, $dets);
-		$this->assertEquals($vals, $client2->getManySimple($keys));
-
-		$det1 = $client2->get('det1');
-		$this->assertTrue($det1->isHit());
-		$this->assertFalse($det1->isMiss());
-		$this->assertEquals('det1', $det1->getKey());
-		$this->assertEquals('det1v', $det1->getValue());
-		if ($client1->hasDetailedSetsEnabled()) {
-			$this->assertEquals(['det1a'], $det1->getAssociations());
-			$this->assertEquals(['det1m' => 'det1mv'], $det1->getMetadata());
-		} else {
-			$this->assertEquals([], $det1->getAssociations());
-			$this->assertEquals([], $det1->getMetadata());
-		}
-
-		$det = $client2->getMany($keys);
-		foreach ($det as $i => $deti) {
-			$this->assertTrue($deti->isHit());
-			$this->assertFalse($deti->isMiss());
-			$this->assertEquals($dets[$i][0], $deti->getKey());
-			$this->assertEquals($dets[$i][1], $deti->getValue());
-			if ($client1->hasDetailedSetsEnabled()) {
-				$this->assertEquals($dets[$i][3], $deti->getAssociations());
-				$this->assertEquals($dets[$i][4], $deti->getMetadata());
-			} else {
-				$this->assertEquals([], $deti->getAssociations());
-				$this->assertEquals([], $deti->getMetadata());
-			}
+			self::assertInstanceOf(CacheLinkItem::class, $item);
+			self::assertTrue($item->isHit());
+			self::assertEquals($key, $item->getKey());
+			self::assertEquals($p[0], $item->getValue());
+			self::assertEquals($p[1], $item->getTtlMillis());
+			self::assertEquals($p[2], $item->getAssociations());
+			self::assertEquals($p[3], $item->getMetadata());
 		}
 	}
 
 	public function testNonexistent()
 	{
 		$this->client->setupDirectRedis($this->redis_client);
-		$this->assertNull($this->client->getSimple('noope'));
-		$this->assertEquals(array_fill(0, 2, null), $this->client->getManySimple(['no1','no2']));
+		self::assertNull($this->client->getSimple('noope'));
+		self::assertEquals(array_fill(0, 2, null), $this->client->getManySimple(['no1','no2']));
 	}
 
 	public function testDifferentEncoding()
@@ -172,30 +123,30 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		mb_internal_encoding('iso-8859-1');
 		$client = $this->createClient();
 		$client->set('encoding_test', 'foo', 10000);
-		$this->assertEquals('foo', $client->getSimple('encoding_test'));
+		self::assertEquals('foo', $client->getSimple('encoding_test'));
 		mb_internal_encoding($old_encoding);
 	}
 
 	public function testSetNull()
 	{
 		$this->client->set('set_null', null, 10000);
-		$this->assertNull($this->client->getSimple('set_null'));
+		self::assertNull($this->client->getSimple('set_null'));
 	}
 
 	public function testRedisSetsAreVisible()
 	{
-		$client1 = $this->createClient(true);
-		$client2 = $this->createClient(true);
+		$client1 = $this->createClient();
+		$client2 = $this->createClient();
 		$redis = $this->createRedisClient();
 		$client1->setupDirectRedis($redis, $redis);
 		$client1->set('simple_key1', 'simple_value1', 100000, [], []);
 		$client2->set('simple_key2', 'simple_value2', 100000, [], []);
-		$this->assertEquals('simple_value1', $client2->getSimple('simple_key1'));
-		$this->assertEquals('simple_value2', $client1->getSimple('simple_key2'));
+		self::assertEquals('simple_value1', $client2->getSimple('simple_key1'));
+		self::assertEquals('simple_value2', $client1->getSimple('simple_key2'));
 	}
 
 	/**
-	 * @expectedException \Aol\CacheLink\CacheLinkServerException
+	 * @expectedException \Aol\CacheLink\Exceptions\CacheLinkServerException
 	 */
 	public function testBadRequest()
 	{
@@ -209,6 +160,24 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	{
 		$this->redis_client->set('d:invalid_get', '$%^&*(');
 		$this->client->getSimple('invalid_get');
+	}
+
+	public function testInvalidGetWithCustomUnserializeExceptionHandler()
+	{
+		$key = 'invalid_get_custom_exception_handler';
+		$raw = '$%^&*(';
+		$this->redis_client->set("d:$key", $raw);
+		$caught = null;
+		$client = $this->createClient();
+		$client->setUnserializeExceptionHandler(function ($ex) use (&$caught, $key, $raw) {
+			$caught = $ex;
+			/** @var CacheLinkUnserializeException $ex */
+			self::assertInstanceOf(CacheLinkUnserializeException::class, $ex);
+			self::assertEquals($key, $ex->getCacheKey());
+			self::assertEquals($raw, $ex->getCacheRawValue());
+		});
+		$client->getSimple($key);
+		self::assertNotNull($caught);
 	}
 
 	/**
@@ -263,20 +232,6 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 		];
 	}
 
-	public function dataDetailedSettingCompatibility()
-	{
-		$redis = $this->createRedisClient();
-		$this->flushRedis($redis);
-		$client_detailed = $this->createClient(true);
-		$client_detailed->setupDirectRedis($redis, $redis);
-		$client_not_detailed = $this->createClient(false);
-		$client_not_detailed->setupDirectRedis($redis, $redis);
-		return [
-			'detailed set, non-detailed read' => [$client_detailed, $client_not_detailed],
-			'non-detailed set, detailed read' => [$client_not_detailed, $client_detailed]
-		];
-	}
-
 	public function dataSetAndGetDetailed()
 	{
 		$set = [
@@ -295,10 +250,10 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	public function testClear()
 	{
 		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
-		$this->assertEquals($ok_set, $this->client->set('foo', 'bar', 100000, [], ['wait' => true]));
-		$this->assertEquals('bar', $this->client->getSimple('foo'));
+		self::assertEquals($ok_set, $this->client->set('foo', 'bar', 100000, [], ['wait' => true]));
+		self::assertEquals('bar', $this->client->getSimple('foo'));
 
-		$this->assertEquals(
+		self::assertEquals(
 			[
 				'success' => true,
 				'level' => 1,
@@ -314,17 +269,17 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			],
 			$this->client->clear(['foo'], CacheLinkClient::CLEAR_LEVELS_ALL, ['wait' => true])
 		);
-		$this->assertNull($this->client->getSimple('foo'));
+		self::assertNull($this->client->getSimple('foo'));
 	}
 
 	public function testClearAssociations()
 	{
 		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
-		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('foo', 'V1', 100000, ['bar','baz'], ['wait' => true])));
-		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('bar', 'V2', 100000, ['asd'], ['wait' => true])));
-		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true])));
-		$this->assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('asd', 'V4', 100000, [], ['wait' => true])));
-		$this->assertEquals(['V1','V2','V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('foo', 'V1', 100000, ['bar','baz'], ['wait' => true])));
+		self::assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('bar', 'V2', 100000, ['asd'], ['wait' => true])));
+		self::assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true])));
+		self::assertEquals($ok_set, array_intersect_key($ok_set, $this->client->set('asd', 'V4', 100000, [], ['wait' => true])));
+		self::assertEquals(['V1','V2','V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
 
 		$expected_clear = [
 			'success' => true,
@@ -370,11 +325,11 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			sort($clear_result['nextLevel']['nextLevel']['keysContains']);
 		}
 
-		$this->assertEquals($expected_clear, $clear_result);
+		self::assertEquals($expected_clear, $clear_result);
 
-		$this->assertEquals([null,null,'V3',null], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals([null,null,'V3',null], $this->client->getManySimple(['foo','bar','baz','asd']));
 
-		$this->assertEquals(
+		self::assertEquals(
 			[
 				'success' => true,
 				'level' => 1,
@@ -395,23 +350,23 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 	public function testClearLater()
 	{
 		$ok_set = ['cacheSet' => 'OK', 'clearAssocIn' => 0, 'success' => true, 'broadcastResult' => null];
-		$this->assertEquals($ok_set, $this->client->set('foo', 'V1', 100000, [], ['wait' => true]));
-		$this->assertEquals($ok_set, $this->client->set('bar', 'V2', 100000, [], ['wait' => true]));
-		$this->assertEquals($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true]));
-		$this->assertEquals($ok_set, $this->client->set('asd', 'V4', 100000, [], ['wait' => true]));
-		$this->assertEquals(['V1','V2','V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals($ok_set, $this->client->set('foo', 'V1', 100000, [], ['wait' => true]));
+		self::assertEquals($ok_set, $this->client->set('bar', 'V2', 100000, [], ['wait' => true]));
+		self::assertEquals($ok_set, $this->client->set('baz', 'V3', 100000, [], ['wait' => true]));
+		self::assertEquals($ok_set, $this->client->set('asd', 'V4', 100000, [], ['wait' => true]));
+		self::assertEquals(['V1','V2','V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
 
 		$this->client->clearLater(['foo','bar']);
 		$this->client->triggerClearNow();
 		usleep(10 * 1000);
 
-		$this->assertEquals([null,null,'V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals([null,null,'V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
 		$this->client->clearLater(['baz','asd']);
 
-		$this->assertEquals([null,null,'V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals([null,null,'V3','V4'], $this->client->getManySimple(['foo','bar','baz','asd']));
 		$this->client->triggerClearNow();
 		usleep(10 * 1000);
-		$this->assertEquals([null,null,null,null], $this->client->getManySimple(['foo','bar','baz','asd']));
+		self::assertEquals([null,null,null,null], $this->client->getManySimple(['foo','bar','baz','asd']));
 	}
 
 
