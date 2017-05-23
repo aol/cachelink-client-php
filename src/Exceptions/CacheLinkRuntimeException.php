@@ -1,8 +1,8 @@
 <?php
 
-namespace Aol\CacheLink;
+namespace Aol\CacheLink\Exceptions;
 
-class CacheLinkServerException extends \Exception
+class CacheLinkRuntimeException extends \RuntimeException
 {
 	/**
 	 * @inheritdoc

@@ -2,6 +2,8 @@
 
 namespace Aol\CacheLink;
 
+use Aol\CacheLink\Exceptions\CacheLinkServerException;
+use Aol\CacheLink\Exceptions\CacheLinkUnserializeException;
 use GuzzleHttp\Client;
 use Psr\Http\Message\RequestInterface;
 
@@ -23,22 +25,20 @@ class CacheLinkClient implements CacheLinkInterface
 	private $redis_prefix_in;
 	/** @var string The default charset.  */
 	private $current_encoding;
-	/** @var bool Whether to set detailed data in cachelink (TTL, associations, metadata, etc.) */
-	private $set_detailed;
+	/** @var callable The unserialize exception handler. */
+	private $unserialize_exception_handler;
 
 	/**
 	 * Create a new cachelink client.
 	 *
-	 * @param string $base_url     The base URL for talking to the cachelink service.
-	 * @param int    $timeout      The HTTP timeout in seconds for the cachelink service response (defaults to 5 seconds).
-	 * @pram  bool   $set_detailed Whether to set detailed data in cachelink (TTL, associations, metadata, etc.)
+	 * @param string $base_url The base URL for talking to the cachelink service.
+	 * @param int    $timeout  The HTTP timeout in seconds for the cachelink service response (defaults to 5 seconds).
 	 */
-	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT, $set_detailed = true)
+	public function __construct($base_url, $timeout = self::DEFAULT_TIMEOUT)
 	{
 		$this->current_encoding = mb_internal_encoding();
 		$this->client           = new Client(['base_uri' => $base_url]);
 		$this->timeout          = $timeout;
-		$this->set_detailed     = $set_detailed;
 	}
 
 	/**
@@ -63,11 +63,13 @@ class CacheLinkClient implements CacheLinkInterface
 	}
 
 	/**
-	 * @return bool Whether detailed sets are enabled.
+	 * Set an exception handler for unserialize failures.
+	 *
+	 * @param callable|null $unserialize_exception_handler The exception handler for unserialize failures.
 	 */
-	public function hasDetailedSetsEnabled()
+	public function setUnserializeExceptionHandler(callable $unserialize_exception_handler = null)
 	{
-		return $this->set_detailed;
+		$this->unserialize_exception_handler = $unserialize_exception_handler;
 	}
 
 	/**
@@ -91,7 +93,7 @@ class CacheLinkClient implements CacheLinkInterface
 	}
 
 	/**
-	 * Unseralize the given string into an object. The string should be a UTF-8 string.
+	 * Unserialize the given string into an object. The string should be a UTF-8 string.
 	 *
 	 * @param string $string The serialized data string.
 	 *
@@ -108,7 +110,42 @@ class CacheLinkClient implements CacheLinkInterface
 		try {
 			return unserialize($string);
 		} catch (\Exception $ex) {
-			throw new \RuntimeException('CacheLink could not unserialize data', 0, $ex);
+			throw new \RuntimeException(
+				__METHOD__ . ': CacheLink could not unserialize data: ' . $ex->getMessage(), 0, $ex
+			);
+		}
+	}
+
+	/**
+	 * Unserialize then thaw the the given key/value pair.
+	 *
+	 * @param string      $key              The key being thawed.
+	 * @param string|null $serialized_value The serialized value or null if none was found (miss).
+	 *
+	 * @return CacheLinkItem The thawed item.
+	 *
+	 * @throws \Exception If there was a problem unserializing or thawing the given data.
+	 */
+	protected function thawSerialized($key, $serialized_value)
+	{
+		try {
+			$val = $this->unserialize($serialized_value);
+			return CacheLinkItem::thaw($key, $val);
+		} catch (\Exception $ex) {
+			$exception = new CacheLinkUnserializeException(
+				__METHOD__ . ': CacheLink could not thaw data: ' . $ex->getMessage(),
+				0,
+				$ex,
+				$key,
+				$serialized_value
+			);
+			$unserialize_exception_handler = $this->unserialize_exception_handler;
+			if ($unserialize_exception_handler) {
+				$unserialize_exception_handler($exception);
+				return new CacheLinkItem($key, null, null, [], []);
+			} else {
+				throw $exception;
+			}
 		}
 	}
 
@@ -123,8 +160,7 @@ class CacheLinkClient implements CacheLinkInterface
 	{
 		// Get the data from cache.
 		$serialized_value = $this->redis_client_read->get($this->redis_prefix_data . $key);
-		$val              = $this->unserialize($serialized_value);
-		$item             = CacheLinkItem::thaw($key, $val);
+		$item             = $this->thawSerialized($key, $serialized_value);
 		return $item;
 	}
 
@@ -152,8 +188,7 @@ class CacheLinkClient implements CacheLinkInterface
 			$this->redis_client_read->createCommand('mget', $keys_data)
 		);
 		foreach ($serialized_values as $index => $serialized_value) {
-			$val       = $this->unserialize($serialized_value);
-			$item      = CacheLinkItem::thaw($keys[$index], $val);
+			$item      = $this->thawSerialized($keys[$index], $serialized_value);
 			$results[] = $item;
 		}
 		return $results;
@@ -170,8 +205,7 @@ class CacheLinkClient implements CacheLinkInterface
 	{
 		$request = $this->requestGet($key);
 		$raw     = $this->makeRequest($request, true);
-		$val     = $this->unserialize($raw);
-		$item    = CacheLinkItem::thaw($key, $val);
+		$item    = $this->thawSerialized($key, $raw);
 		return $item;
 	}
 
@@ -194,8 +228,7 @@ class CacheLinkClient implements CacheLinkInterface
 		if (!empty($raw_by_key) && is_array($raw_by_key)) {
 			foreach ($raw_by_key as $key => $raw) {
 				if ($raw !== null && isset($index_by_key[$key])) {
-					$val                     = $this->unserialize($raw);
-					$item                    = CacheLinkItem::thaw($key, $val);
+					$item                    = $this->thawSerialized($key, $raw);
 					$index                   = $index_by_key[$key];
 					$result_by_index[$index] = $item;
 				}
@@ -224,12 +257,8 @@ class CacheLinkClient implements CacheLinkInterface
 	 */
 	protected function directSet($key, $value, $millis, $metadata = [])
 	{
-		if ($this->set_detailed) {
-			$item   = new CacheLinkItem($key, $value, $millis, [], $metadata);
-			$frozen = $item->freeze();
-		} else {
-			$frozen = $value;
-		}
+		$item             = new CacheLinkItem($key, $value, $millis, [], $metadata);
+		$frozen           = $item->freeze();
 		$serialized_value = $this->serialize($frozen);
 		$key_data         = $this->redis_prefix_data . $key;
 		$key_in           = $this->redis_prefix_in   . $key;
@@ -261,7 +290,7 @@ class CacheLinkClient implements CacheLinkInterface
 			'clearAssocIn'    => 0,
 			'success'         => $success,
 			'broadcastResult' => null,
-            'directSet'       => true,
+			'directSet'       => true,
 		];
 	}
 
@@ -282,14 +311,11 @@ class CacheLinkClient implements CacheLinkInterface
 	 */
 	protected function serviceSet($key, $value, $millis, $associations, $metadata, $broadcast, $wait)
 	{
-		if ($this->set_detailed) {
-			$item   = new CacheLinkItem($key, $value, $millis, $associations, $metadata);
-			$frozen = $item->freeze();
-		} else {
-			$frozen = $value;
-		}
+		$item             = new CacheLinkItem($key, $value, $millis, $associations, $metadata);
+		$frozen           = $item->freeze();
 		$serialized_value = $this->serialize($frozen);
-		$request = $this->requestSet($key, $serialized_value, $millis, $associations, $broadcast);
+		$request          = $this->requestSet($key, $serialized_value, $millis, $associations, $broadcast);
+
 		return $this->makeRequest($request, $wait);
 	}
 

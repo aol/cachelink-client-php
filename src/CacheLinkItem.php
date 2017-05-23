@@ -2,6 +2,8 @@
 
 namespace Aol\CacheLink;
 
+use Aol\CacheLink\Exceptions\CacheLinkRuntimeException;
+
 class CacheLinkItem
 {
 	const ITEM_IDENTIFIER = '[cachelink_php]';
@@ -93,16 +95,43 @@ class CacheLinkItem
 	/**
 	 * Thaw an item from cachelink.
 	 *
-	 * @param string $key  The cached key.
-	 * @param array  $item The cached item.
+	 * @param string     $key  The cached key.
+	 * @param array|null $item The cached item or null.
 	 *
 	 * @return CacheLinkItem The item.
+	 *
+	 * @throws CacheLinkRuntimeException If the item could not be thawed.
 	 */
 	public static function thaw($key, $item)
 	{
+		if ($item === null) {
+			return new self($key, null, null, [], []);
+		}
 		if (is_array($item) && count($item) === 5 && $item[0] === self::ITEM_IDENTIFIER) {
 			return new self($key, $item[1], $item[2], $item[3], $item[4]);
 		}
-		return new self($key, $item, null, [], []);
+		throw new CacheLinkRuntimeException(
+			__METHOD__ . ": could_not_thaw key:($key) " .
+			self::stringifyValueForErrorMessage($item)
+		);
+	}
+
+	/**
+	 * Return the string representation of a value in cache for debugging.
+	 * The string representation is used in an exception message.
+	 *
+	 * @param mixed $value The value to stringify for use in an exception.
+	 *
+	 * @return string The stringified value.
+	 */
+	private static function stringifyValueForErrorMessage($value)
+	{
+		$val = json_encode($value);
+		$max_val_length = 200;
+		if (strlen($value) > $max_val_length) {
+			$val = substr($value, 0, $max_val_length - 3) . '...';
+		}
+		$type = gettype($value);
+		return "type:($type) value:($val)";
 	}
 }
