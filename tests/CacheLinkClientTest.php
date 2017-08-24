@@ -3,6 +3,7 @@
 namespace Aol\CacheLink\Tests;
 
 use Aol\CacheLink\CacheLinkClient;
+use Aol\CacheLink\CacheLinkEncoderStandard;
 use Aol\CacheLink\CacheLinkItem;
 use Aol\CacheLink\Exceptions\CacheLinkUnserializeException;
 use Predis\Client;
@@ -32,6 +33,17 @@ abstract class CacheLinkClientTest extends \PHPUnit_Framework_TestCase
 			'http://localhost:' . $this->getPort(),
 			CacheLinkClient::DEFAULT_TIMEOUT
 		);
+	}
+
+	public function testCustomDecoderIsUsed()
+	{
+		$this->client->setupDirectRedis($this->redis_client, $this->redis_client);
+		$item = new CacheLinkItem(__METHOD__, __METHOD__ . '_value', 10000, [], []);
+		$decoder = self::getMockBuilder(CacheLinkEncoderStandard::class)->getMock();
+		$decoder->expects(self::once())->method('decode')->willReturn($item->freeze());
+		$this->client->setDecoder($decoder);
+		$this->client->set($item->getKey(), $item->getValue(), $item->getTtlMillis());
+		self::assertEquals($item->getValue(), $this->client->getSimple($item->getKey()));
 	}
 
 	/**
