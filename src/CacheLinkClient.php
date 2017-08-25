@@ -2,6 +2,8 @@
 
 namespace Aol\CacheLink;
 
+use Aol\CacheLink\Exceptions\CacheLinkEncoderException;
+use Aol\CacheLink\Exceptions\CacheLinkRuntimeException;
 use Aol\CacheLink\Exceptions\CacheLinkServerException;
 use Aol\CacheLink\Exceptions\CacheLinkUnserializeException;
 use GuzzleHttp\Client;
@@ -27,6 +29,10 @@ class CacheLinkClient implements CacheLinkInterface
 	private $current_encoding;
 	/** @var callable The unserialize exception handler. */
 	private $unserialize_exception_handler;
+	/** @var CacheLinkEncoderInterface The encoder to use (default to standard). */
+	private $encoder;
+	/** @var CacheLinkEncoderInterface The decoder to use (default to the encoder). */
+	private $decoder;
 
 	/**
 	 * Create a new cachelink client.
@@ -63,6 +69,52 @@ class CacheLinkClient implements CacheLinkInterface
 	}
 
 	/**
+	 * Get the encoder.
+	 *
+	 * @return CacheLinkEncoderInterface The encoder.
+	 */
+	public function getEncoder()
+	{
+		if (!$this->encoder) {
+			$this->encoder = new CacheLinkEncoderStandard();
+		}
+		return $this->encoder;
+	}
+
+	/**
+	 * Set the encoder.
+	 *
+	 * @param CacheLinkEncoderInterface $encoder The encoder to use.
+	 */
+	public function setEncoder(CacheLinkEncoderInterface $encoder)
+	{
+		$this->encoder = $encoder;
+	}
+
+	/**
+	 * Get the decoder.
+	 *
+	 * @return CacheLinkEncoderInterface The decoder.
+	 */
+	public function getDecoder()
+	{
+		if (!$this->decoder) {
+			return $this->getEncoder();
+		}
+		return $this->decoder;
+	}
+
+	/**
+	 * Set the decoder.
+	 *
+	 * @param CacheLinkEncoderInterface $decoder The decoder to use.
+	 */
+	public function setDecoder(CacheLinkEncoderInterface $decoder)
+	{
+		$this->decoder = $decoder;
+	}
+
+	/**
 	 * Set an exception handler for unserialize failures.
 	 *
 	 * @param callable|null $unserialize_exception_handler The exception handler for unserialize failures.
@@ -79,13 +131,9 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @return string The serialized, UTF-8 string.
 	 */
-	protected function serialize($data)
+	private function serialize($data)
 	{
-		try {
-			$string = serialize($data);
-		} catch (\Exception $ex) {
-			throw new \RuntimeException('CacheLink could not serialize data', 0, $ex);
-		}
+		$string = $this->getEncoder()->encode($data);
 		if ($this->current_encoding !== 'UTF-8') {
 			$string = iconv($this->current_encoding, 'UTF-8', $string);
 		}
@@ -99,7 +147,7 @@ class CacheLinkClient implements CacheLinkInterface
 	 *
 	 * @return mixed The unserialized data object.
 	 */
-	protected function unserialize($string)
+	private function unserialize($string)
 	{
 		if ($string === null) {
 			return null;
@@ -107,13 +155,7 @@ class CacheLinkClient implements CacheLinkInterface
 		if ($this->current_encoding !== 'UTF-8') {
 			$string = iconv('UTF-8', $this->current_encoding, $string);
 		}
-		try {
-			return unserialize($string);
-		} catch (\Exception $ex) {
-			throw new \RuntimeException(
-				__METHOD__ . ': CacheLink could not unserialize data: ' . $ex->getMessage(), 0, $ex
-			);
-		}
+		return $this->getDecoder()->decode($string);
 	}
 
 	/**

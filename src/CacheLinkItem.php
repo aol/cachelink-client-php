@@ -3,6 +3,7 @@
 namespace Aol\CacheLink;
 
 use Aol\CacheLink\Exceptions\CacheLinkRuntimeException;
+use Aol\CacheLink\Exceptions\CacheLinkThawException;
 
 class CacheLinkItem
 {
@@ -110,9 +111,8 @@ class CacheLinkItem
 		if (is_array($item) && count($item) === 5 && $item[0] === self::ITEM_IDENTIFIER) {
 			return new self($key, $item[1], $item[2], $item[3], $item[4]);
 		}
-		throw new CacheLinkRuntimeException(
-			__METHOD__ . ": could_not_thaw key:($key) " .
-			self::stringifyValueForErrorMessage($item)
+		throw new CacheLinkThawException(
+			"CacheLink could not thaw key:($key) " . self::stringifyValueForErrorMessage($item)
 		);
 	}
 
