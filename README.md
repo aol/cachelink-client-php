@@ -10,14 +10,8 @@ A PHP client for AOL [cachelink](https://github.com/aol/cachelink-service).
 
 ## Install
 
-Add to `composer.json`:
-
-```json
-{
-    "require": {
-        "aol/cachelink-client-php": "^9.0"
-    }
-}
+```
+composer require aol/cachelink-client-php
 ```
 
 ## Usage
